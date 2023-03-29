@@ -412,6 +412,17 @@ export default React.forwardRef(function Autocomplete<T = unknown>(
     [blur, items],
   );
 
+  const inputWidth = useMemo(
+    () =>
+      autoSize
+        ? Math.max(
+            measureText(value != undefined && value.length > 0 ? value : placeholder ?? ""),
+            minWidth,
+          )
+        : "100%",
+    [autoSize, value, placeholder, minWidth],
+  );
+
   return (
     <ReactAutocomplete
       open={open}
@@ -454,12 +465,7 @@ export default React.forwardRef(function Autocomplete<T = unknown>(
           fontSize,
           paddingLeft: 4,
           pointerEvents: readOnly === true ? "none" : "auto",
-          width: autoSize
-            ? Math.max(
-                measureText(value != undefined && value.length > 0 ? value : placeholder ?? ""),
-                minWidth,
-              )
-            : "100%",
+          width: inputWidth,
         },
         onFocus,
         onBlur,
