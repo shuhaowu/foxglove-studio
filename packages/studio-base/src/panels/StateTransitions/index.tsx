@@ -25,7 +25,10 @@ import { add as addTimes, fromSec, subtract as subtractTimes, toSec } from "@fox
 import * as PanelAPI from "@foxglove/studio-base/PanelAPI";
 import { useBlocksByTopic } from "@foxglove/studio-base/PanelAPI";
 import { getTopicsFromPaths } from "@foxglove/studio-base/components/MessagePathSyntax/parseRosPath";
-import { useDecodeMessagePathsForMessagesByTopic } from "@foxglove/studio-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import {
+  MessageDataItemsByPath,
+  useDecodeMessagePathsForMessagesByTopic,
+} from "@foxglove/studio-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import useMessagesByPath from "@foxglove/studio-base/components/MessagePathSyntax/useMessagesByPath";
 import {
   MessagePipelineContext,
@@ -70,6 +73,7 @@ export const transitionableRosTypes = [
 const fontFamily = fonts.MONOSPACE;
 const fontSize = 10;
 const fontWeight = "bold";
+const emptyItemsByPath: MessageDataItemsByPath = {};
 
 const useStyles = makeStyles<void, "button">()((theme) => ({
   chartWrapper: {
@@ -192,7 +196,7 @@ const StateTransitions = React.memo(function StateTransitions(props: Props) {
     () => (!currentTime || !startTime ? undefined : toSec(subtractTimes(currentTime, startTime))),
     [currentTime, startTime],
   );
-  const itemsByPath = useMessagesByPath(pathStrings);
+  let itemsByPath = useMessagesByPath(pathStrings);
 
   const decodeMessagePathsForMessagesByTopic = useDecodeMessagePathsForMessagesByTopic(pathStrings);
 
@@ -210,6 +214,42 @@ const StateTransitions = React.memo(function StateTransitions(props: Props) {
       heightPerTopic: onlyTopicsHeight / paths.length,
     };
   }, [paths.length]);
+
+  // If we have have messages in blocks for this path, we ignore streamed
+  // messages and only display the messages from blocks.
+  //
+  // Creating the datasets for chartjs is time consuming process with a large
+  // number of data and multiple paths being visualized. In most situations (?),
+  // the data should be coming from the blocks, which means no chartjs datasets
+  // is generated from itemsByPath. That said, the datasets creation below has
+  // fallback logic to generate datasets from itemsByPath if the path is not
+  // found in the data retrieved from the blocks, which is not used for most
+  // situations (?). Since itemsByPath can change every frame due to more data
+  // being fed from the player, this can cause every frame to regenerate the
+  // datasets for chartjs, despite the fact that it is not being used.
+  //
+  // This is a poor optimization that ensures the memo function is not called if
+  // itemsByPath is not used and decodedBlocks has not changed. This
+  // optimization is not great, because if there is a single path that uses
+  // itemsByPath, it will cause the blocks datasets to be regenerated as well.
+  // More granular caching would be better, but React makes it difficult to
+  // write this code in a straight-forward manner and this change is good enough
+  // for now.
+  //
+  // TODO: make this better.
+  const pathsWithoutBlocks = new Set<string>(Object.keys(itemsByPath));
+  for (const path in itemsByPath) {
+    if (
+      decodedBlocks.some((decodedBlock) => Object.prototype.hasOwnProperty.call(decodedBlock, path))
+    ) {
+      pathsWithoutBlocks.delete(path);
+    }
+  }
+
+  // This allows memo dependency to always have a stable object so it doesn't recompute.
+  if (pathsWithoutBlocks.size === 0) {
+    itemsByPath = emptyItemsByPath;
+  }
 
   const { datasets, tooltips, minY } = useMemo(() => {
     let outMinY: number | undefined;
