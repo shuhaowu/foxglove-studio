@@ -18,7 +18,7 @@ import useDeepMemo from "./useDeepMemo";
 
 describe("useDeepMemo", () => {
   it("returns original object when deep equal", () => {
-    let obj: unknown = { x: 1 };
+    let obj: object = { x: 1 };
     const { result, rerender } = renderHook((val) => useDeepMemo(val), { initialProps: obj });
     expect(result.current).toBe(obj);
     rerender({ x: 1 });

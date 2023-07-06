@@ -15,11 +15,35 @@ import { isEqual } from "lodash";
 import { useRef } from "react";
 
 // Continues to return the same instance as long as deep equality is maintained.
-export default function useDeepMemo<T>(value: T): T {
+export default function useDeepMemo<T extends object | undefined>(value: T): T {
   const ref = useRef(value);
-  if (isEqual(value, ref.current)) {
+  const deepEqualCopiesRef = useRef<WeakSet<object>>();
+
+  if (value == undefined) {
+    return value;
+  }
+
+  if (!deepEqualCopiesRef.current) {
+    deepEqualCopiesRef.current = new WeakSet();
+  }
+
+  // If A is passed to useDeepMemo first and get memoized, then B (which is
+  // equal to A in value but different in reference) is passed to useDeepMemo
+  // every time it is called henceforth, we need to ensure we don't run isEqual
+  // for every subsequent call. This is what the WeakSet allows us to do.
+  if (deepEqualCopiesRef.current.has(value)) {
     return ref.current;
   }
+
+  if (isEqual(value, ref.current)) {
+    deepEqualCopiesRef.current.add(value);
+    return ref.current;
+  }
+
+  // New value detected, so we need to remove all the deepEqualCopies weak set
+  // so we don't return the wrong value.
+  deepEqualCopiesRef.current = new WeakSet();
+  deepEqualCopiesRef.current.add(value);
   ref.current = value;
   return value;
 }
